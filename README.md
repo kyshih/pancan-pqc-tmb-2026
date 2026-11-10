@@ -1,4 +1,4 @@
-# pancan-pqc-tmb
+# pancan-pqc-tmb-2026
 
 Analysis code for the pan-cancer TCGA analysis of protein quality control (PQC) and tumor mutational burden (TMB) (Shih et al., 2026).
 
