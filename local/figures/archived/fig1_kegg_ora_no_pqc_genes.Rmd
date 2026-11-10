@@ -1,0 +1,160 @@
+---
+title: "KEGG ORA for TMB-Associated Non-PQC Genes"
+author: "Karen Shih"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# 1. Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forcats)
+```
+
+# 2. Load data
+```{r}
+base_dir <- "/Users/karenshih/Documents/research/scg/protein-master/v2_pancan_batch_corrected"
+data_dir <- file.path(base_dir, "analysis/04_enrichment/ora")
+df <- read_csv(file.path(data_dir, "kegg_ora_tmb_up_non_pqc.csv"))
+```
+
+# 3. Clean + prepare data
+```{r}
+df_clean <- df %>%
+  filter(category != "Human Diseases") %>%
+  filter(!subcategory %in% c(
+    "Global and overview maps",
+    "Transport and catabolism",
+    "Endocrine system"
+  )) %>%
+  filter(!Description %in% c(
+    "Oocyte meiosis",
+    "Progesterone-mediated oocyte maturation"
+  )) %>%
+   filter(!subcategory %in% c(
+    "Environmental adaptation"
+   ))
+```
+
+```{r}
+unique(df_clean$subcategory)
+```
+
+```{r}
+df_clean <- df_clean %>%
+  mutate(
+    group = case_when(
+      # 🔥 PQC
+      subcategory == "Folding, sorting and degradation" ~ "Protein quality control (PQC)",
+      
+      # 🧬 DNA
+      subcategory == "Replication and repair" ~ "DNA replication and repair",
+      
+      # ⚡ All metabolism collapsed
+      subcategory %in% c(
+        "Energy metabolism",
+        "Carbohydrate metabolism",
+        "Metabolism of terpenoids and polyketides",
+        "Glycan biosynthesis and metabolism",
+        "Amino acid metabolism"
+      ) ~ "Metabolism",
+      
+      # 🛡️ Immune
+      subcategory == "Immune system" ~ "Immune",
+      
+      # everything else stays the same
+      TRUE ~ subcategory
+    )
+  )
+```
+
+# 5. Order + palette
+```{r}
+df_clean <- df_clean %>%
+  mutate(
+    group = factor(group, levels = c(
+      "Protein quality control (PQC)",
+      "Translation",
+      "Transcription",
+      "DNA replication and repair",
+      "Cell growth and death",
+      "Metabolism",
+      "Immune"
+    ))
+  )
+```
+
+```{r}
+category_order <- c(
+  "Protein quality control (PQC)",
+  "Translation",
+  "Transcription",
+  "DNA replication and repair",
+  "Cell growth and death",
+  "Metabolism",
+  "Immune",
+  "Other"
+)
+```
+
+```{r}
+palette <- c(
+  "Protein quality control (PQC)" = "#D55E00",   # 🔥 strong orange/red (highlight)
+  "Translation"                  = "#1b9e77",   # green
+  "Transcription"                = "#377eb8",   # blue
+  "DNA replication and repair"   = "#984ea3",   # purple
+  "Cell growth and death"        = "#f781bf",   # pink
+  "Metabolism"                   = "#ff7f00",   # orange
+  "Immune"                       = "#e41a1c",   # red
+  "Other"                        = "gray70"     # muted
+)
+
+df_clean <- df_clean %>%
+  mutate(
+    group = factor(group, levels = category_order),
+    Description = fct_reorder(Description, neglogP)
+  )
+```
+
+# 6. Plot by functional category
+```{r}
+p_category <- ggplot(df_clean, aes(x = neglogP, y = Description, fill = group)) +
+  geom_col(width = 0.7) +
+
+  facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+
+  scale_fill_manual(values = palette) +
+
+  geom_vline(xintercept = -log10(0.05),
+             linetype = "dashed",
+             color = "gray40",
+             size = 0.6) +
+
+  labs(
+    x = "-log10(FDR)",
+    y = NULL,
+    title = "KEGG Pathway Enrichment\nAll TMB-Associated Genes Minus PQC Genes",
+    subtitle = "Colored by functional category; dashed line indicates FDR = 0.05"
+  ) +
+
+  theme_minimal(base_size = 11) +
+
+  theme(
+    strip.text.y = element_text(angle = 0, face = "bold", size = 10),
+    legend.position = "none",
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(face = "bold", size = 12),
+    panel.spacing = unit(0.4, "lines")
+  )
+```
+```{r}
+p_category
+```
+
+
+```{r}
+fout = file.path(base_dir, "results/figures/main/fig1/kegg_ora_by_function_no_pqc_genes.pdf")
+ggsave(fout, p_category, width = 7, height = 9, dpi = 300)
+```
